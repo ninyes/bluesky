@@ -62,6 +62,14 @@ class PerfBase(Entity, replaceable=True):
             "The currently selected performance model doesn't support engine changes.",
         )
 
+    @command(name='MASS')
+    def selacmass(self, acid: 'acid', mass: 'float'):
+        """ MASS, acid, mass 
+    
+        Select aircraft mass for performance."""
+        self.mass[acid] = mass
+        return True
+
     @command(name="PERFSTATS", aliases=("PERFINFO", "PERFDATA"))
     def show_performance(self, acid: "acid"):
         """Show aircraft perfromance parameters for aircraft 'acid'"""

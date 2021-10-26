@@ -17,21 +17,19 @@ flstheader = \
     'Parameters [Units]:\n' + \
     'Deletion Time [s], ' + \
     'Call sign [-], ' + \
+    'AC type [-], ' + \
     'Spawn Time [s], ' + \
     'Flight time [s], ' + \
     'Actual Distance 2D [nm], ' + \
     'Actual Distance 3D [nm], ' + \
     'Work Done [MJ], ' + \
+    'Fuel Consumed [kg], ' + \
     'Latitude [deg], ' + \
     'Longitude [deg], ' + \
     'Altitude [ft], ' + \
     'TAS [kts], ' + \
     'Vertical Speed [fpm], ' + \
     'Heading [deg], ' + \
-    'Origin Lat [deg], ' + \
-    'Origin Lon [deg], ' + \
-    'Destination Lat [deg], ' + \
-    'Destination Lon [deg], ' + \
     'ASAS Active [bool], ' + \
     'Pilot ALT [ft], ' + \
     'Pilot SPD (TAS) [kts], ' + \
@@ -116,6 +114,7 @@ class Area(Entity):
             self.dstart2D = np.array([])
             self.dstart3D = np.array([])
             self.workstart = np.array([])
+            self.entrymass = np.array([])
             self.entrytime = np.array([])
             self.create_time = np.array([])
 
@@ -189,6 +188,7 @@ class Area(Entity):
             self.dstart2D[newentries] = self.distance2D[newentries]
             self.dstart3D[newentries] = self.distance3D[newentries]
             self.workstart[newentries] = traf.work[newentries]
+            self.entrymass[newentries] = traf.perf.mass[newentries]
             self.entrytime[newentries] = sim.simt
 
             # Log flight statistics when exiting experiment area
@@ -199,11 +199,13 @@ class Area(Entity):
             if np.any(exits):
                 self.flst.log(
                     np.array(traf.id)[exits],
+                    np.array(traf.type)[exits],
                     self.create_time[exits],
                     sim.simt - self.entrytime[exits],
                     (self.distance2D[exits] - self.dstart2D[exits])/nm,
                     (self.distance3D[exits] - self.dstart3D[exits])/nm,
                     (traf.work[exits] - self.workstart[exits])*1e-6,
+                    (traf.entrymass[exits] - traf.perf.mass[exits]),
                     traf.lat[exits],
                     traf.lon[exits],
                     traf.alt[exits]/ft,

@@ -205,7 +205,7 @@ class Area(Entity):
                     (self.distance2D[exits] - self.dstart2D[exits])/nm,
                     (self.distance3D[exits] - self.dstart3D[exits])/nm,
                     (traf.work[exits] - self.workstart[exits])*1e-6,
-                    (traf.entrymass[exits] - traf.perf.mass[exits]),
+                    (self.entrymass[exits] - traf.perf.mass[exits]),
                     traf.lat[exits],
                     traf.lon[exits],
                     traf.alt[exits]/ft,

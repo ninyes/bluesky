@@ -3,6 +3,7 @@ scenario/ic.scn
 scenario/Nino/*
 data/cache
 data/grib
+data/NetCDF
 data/performance/BADA/*
 !/data/performance/BADA/README.md
 
@@ -93,3 +94,4 @@ ssd.obj
 *-checkpoint.ipynb
 .ropeproject/config.py
 plugins/invdKDtree.py
+data/NetCDF/p_levels_20190402.nc

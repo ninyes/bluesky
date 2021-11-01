@@ -100,6 +100,9 @@ class StateBased(ConflictDetection):
         swlos = (dist < rpz) * (np.abs(dalt) < hpz)
         lospairs = [(ownship.id[i], ownship.id[j]) for i, j in zip(*np.where(swlos))]
 
+        # Calculate the intrusion severity
+        self.int_sev = np.min(((rpz[swlos] - dist[swlos])/rpz[swlos], (hpz[swlos] - dalt[swlos])/hpz[swlos]), axis=0)
+        
         return confpairs, lospairs, inconf, tcpamax, \
             qdr[swconfl], dist[swconfl], np.sqrt(dcpa2[swconfl]), \
                 tcpa[swconfl], tinconf[swconfl]

@@ -28,16 +28,17 @@ fuelheader = \
     'Current Mass [kg], ' + \
     'Fuel Consumed [kg]'
 
-# # Log parameters for the los of separations log
-# losheader = \
-#     '#######################################################\n' + \
-#     'CONF LOG\n' + \
-#     'Conflict Statistics\n' + \
-#     '#######################################################\n\n' + \
-#     'Parameters [Units]:\n' + \
-#     'Simulation time [s], ' + \
-#     'LoS pair [-], ' + \
-#     'Intrusion severity [-]'
+# Log parameters for the los of separations log
+losheader = \
+    '#######################################################\n' + \
+    'CONF LOG\n' + \
+    'Conflict Statistics\n' + \
+    '#######################################################\n\n' + \
+    'Parameters [Units]:\n' + \
+    'Simulation time [s], ' + \
+    'AC1 [-], ' + \
+    'AC2 [-], ' + \
+    'Intrusion severity [-]'
 
 # Global data
 perflog = None
@@ -87,11 +88,11 @@ class PerformanceLogger(Entity):
 
         # The loggers
         self.fuellog = datalog.crelog('FUELLOG', None, fuelheader)
-        # self.loslog = datalog.crelog('LOSLOG', None, losheader)
+        self.loslog = datalog.crelog('LOSLOG', None, losheader)
 
         # Start the loggers
         self.fuellog.start()
-        # self.loslog.start()
+        self.loslog.start()
 
     def reset(self):
         ''' Reset area state when simulation is reset. '''
@@ -115,9 +116,9 @@ class PerformanceLogger(Entity):
         traf.perf.mass[idx] = mass
         self.startmass[idx] = traf.perf.mass[idx]
 
-    # @timed_function(name='PERFLOG', dt=1.0)
-    # def update(self, dt):
-    #     ''' Update Los of Separation metrics, intrusion severity '''
+    @timed_function(name='PERFLOG', dt=1.0)
+    def update(self, dt):
+        ''' Update Los of Separation metrics, intrusion severity '''
         
-    #     if self.sb.int_sev.any():
-    #         self.loslog.log(traf.cd.lospairs, self.sb.int_sev)
+        if self.sb.int_sev.any():
+            self.loslog.log(traf.cd.lospairs, self.sb.int_sev)

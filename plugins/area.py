@@ -43,7 +43,11 @@ confheader = \
     '#######################################################\n\n' + \
     'Parameters [Units]:\n' + \
     'Simulation time [s], ' + \
-    'Total number of conflicts in exp area [-]\n'
+    'Total number of conflicts in exp area [-], ' + \
+    'AC1 [-], ' + \
+    'AC2 [-], ' + \
+    'Spawn Time1 [s], ' + \
+    'Spawn Time2 [s]\n'
 
 # Global data
 area = None
@@ -180,7 +184,9 @@ class Area(Entity):
                 nnewconf_exp = np.count_nonzero(newconf_inside)
                 if nnewconf_exp:
                     self.confinside_all += nnewconf_exp
-                    self.conflog.log(self.confinside_all)
+                    self.conflog.log(self.confinside_all,
+                                     list(zip(ac1, ac2)),
+                                     list(zip(self.create_time[idx1], self.create_time[idx2])))
             self.prevconfpairs = set(traf.cd.confpairs)
 
             # Register distance values upon entry of experiment area

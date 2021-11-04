@@ -286,6 +286,7 @@ class OpenAP(PerfBase):
             floats or 1D-arrays: Allowed TAS, Allowed vetical rate, Allowed altitude
         """
         allow_h = np.where(intent_h > self.hmax, self.hmax, intent_h)
+        allow_h = np.where(allow_h < 0., 0.1, allow_h)
 
         intent_v_cas = aero.vtas2cas(intent_v_tas, allow_h)
         allow_v_cas = np.where((intent_v_cas < self.vmin), self.vmin, intent_v_cas)
@@ -302,7 +303,7 @@ class OpenAP(PerfBase):
             (intent_vs > 0) & (intent_vs > self.vsmax), vs_max_with_acc, intent_vs
         )  # for climb with vs larger than vsmax
         allow_vs = np.where(
-            (intent_vs < 0) & (intent_vs < self.vsmin), self.vsmin, allow_vs
+            (intent_vs < 0) & (intent_vs < self.vsmin), vs_max_with_acc, allow_vs
         )  # for descent with vs smaller than vsmin (negative)
         allow_vs = np.where(
             (self.phase == ph.GD) & (bs.traf.tas < self.vminto), 0, allow_vs

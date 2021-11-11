@@ -129,6 +129,8 @@ class PerformanceLogger(Entity):
             ac1, ac2 = zip(*newconf_unique)
             idx1 = traf.id2idx(ac1)
             idx2 = traf.id2idx(ac2)
-            
-            self.loslog.log(traf.cd.lospairs, traf.lat[idx1 + idx2], 
-                            traf.lon[idx1 + idx2], self.sb.int_sev)
+            indcs = [traf.cd.lospairs.index(x) for x in list(zip(ac1, ac2))]
+            intsev = self.sb.int_sev[indcs]
+
+            self.loslog.log(list(zip(ac1, ac2)), list(zip(traf.lat[idx1], traf.lon[idx1])),
+                            list(zip(traf.lat[idx2], traf.lon[idx2])), intsev)

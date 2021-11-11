@@ -38,6 +38,10 @@ losheader = \
     'Simulation time [s], ' + \
     'AC1 [-], ' + \
     'AC2 [-], ' + \
+    'Lat1 [deg], ' + \
+    'Lon1 [deg], ' + \
+    'Lat2 [deg], ' + \
+    'Lon2 [deg], ' + \
     'Intrusion severity [-]'
 
 # Global data
@@ -121,4 +125,10 @@ class PerformanceLogger(Entity):
         ''' Update Los of Separation metrics, intrusion severity '''
         
         if self.sb.int_sev.any():
-            self.loslog.log(traf.cd.lospairs, self.sb.int_sev)
+            newconf_unique = {frozenset(pair) for pair in traf.cd.lospairs}
+            ac1, ac2 = zip(*newconf_unique)
+            idx1 = traf.id2idx(ac1)
+            idx2 = traf.id2idx(ac2)
+            
+            self.loslog.log(traf.cd.lospairs, traf.lat[idx1 + idx2], 
+                            traf.lon[idx1 + idx2], self.sb.int_sev)

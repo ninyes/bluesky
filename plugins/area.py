@@ -47,7 +47,11 @@ confheader = \
     'AC1 [-], ' + \
     'AC2 [-], ' + \
     'Spawn Time1 [s], ' + \
-    'Spawn Time2 [s]\n'
+    'Spawn Time2 [s], ' + \
+    'Lat1 [deg], ' + \
+    'Lon1 [deg], ' + \
+    'Lat2 [deg], ' + \
+    'Lon2 [deg] \n'
 
 # Global data
 area = None
@@ -186,7 +190,8 @@ class Area(Entity):
                     self.confinside_all += nnewconf_exp
                     self.conflog.log(self.confinside_all,
                                      list(zip(ac1, ac2)),
-                                     list(zip(self.create_time[idx1], self.create_time[idx2])))
+                                     list(zip(self.create_time[idx1], self.create_time[idx2])),
+                                     traf.lat[idx1], traf.lon[idx1], traf.lat[idx2], traf.lon[idx2])
             self.prevconfpairs = set(traf.cd.confpairs)
 
             # Register distance values upon entry of experiment area

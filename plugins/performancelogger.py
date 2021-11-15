@@ -7,6 +7,7 @@ from bluesky import traf  #, settings, navdb, traf, sim, scr, tools
 from bluesky.tools import datalog
 from bluesky.core import Entity, timed_function
 from bluesky.traffic.asas import StateBased
+from plugins.area import Area
 
 """ 
 Try to add the fuel consumption per aircraft, for which the initial mass is necessary.
@@ -38,6 +39,8 @@ losheader = \
     'Simulation time [s], ' + \
     'AC1 [-], ' + \
     'AC2 [-], ' + \
+    'Spawn Time1 [s], ' + \
+    'Spawn Time2 [s], ' + \
     'Lat1 [deg], ' + \
     'Lon1 [deg], ' + \
     'Lat2 [deg], ' + \
@@ -86,6 +89,7 @@ class PerformanceLogger(Entity):
     def __init__(self):
         super().__init__()
         self.sb = StateBased()
+        self.area = Area()
         
         with self.settrafarrays():
             self.startmass = np.array([])
@@ -132,5 +136,7 @@ class PerformanceLogger(Entity):
             indcs = [traf.cd.lospairs.index(x) for x in list(zip(ac1, ac2))]
             intsev = self.sb.int_sev[indcs]
 
-            self.loslog.log(list(zip(ac1, ac2)), list(zip(traf.lat[idx1], traf.lon[idx1])),
+            self.loslog.log(list(zip(ac1, ac2)), 
+                            list(zip(self.area.create_time[idx1], self.area.create_time[idx2])),
+                            list(zip(traf.lat[idx1], traf.lon[idx1])),
                             list(zip(traf.lat[idx2], traf.lon[idx2])), intsev)

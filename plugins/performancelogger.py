@@ -127,8 +127,8 @@ class PerformanceLogger(Entity):
     @timed_function(name='PERFLOG', dt=1.0)
     def update(self, dt):
         ''' Update Los of Separation metrics, intrusion severity '''
-        
-        if self.sb.int_sev.any():
+
+        if len(traf.cd.lospairs) > 0:
             newconf_unique = {frozenset(pair) for pair in traf.cd.lospairs}
             ac1, ac2 = zip(*newconf_unique)
             idx1 = traf.id2idx(ac1)

@@ -45,6 +45,10 @@ losheader = \
     'Lon1 [deg], ' + \
     'Lat2 [deg], ' + \
     'Lon2 [deg], ' + \
+    'Alt1 [m], ' + \
+    'Alt2 [m], ' + \
+    'Hdg1 [deg], ' + \
+    'Hdg2 [deg], ' + \
     'Intrusion severity [-]'
 
 # Global data
@@ -139,4 +143,6 @@ class PerformanceLogger(Entity):
             self.loslog.log(list(zip(ac1, ac2)), 
                             list(zip(self.area.create_time[idx1], self.area.create_time[idx2])),
                             list(zip(traf.lat[idx1], traf.lon[idx1])),
-                            list(zip(traf.lat[idx2], traf.lon[idx2])), intsev)
+                            list(zip(traf.lat[idx2], traf.lon[idx2])),
+                            list(zip(traf.alt[idx1], traf.alt[idx2])),
+                            list(zip(traf.hdg[idx1], traf.hdg[idx2])), intsev)

@@ -51,7 +51,11 @@ confheader = \
     'Lat1 [deg], ' + \
     'Lon1 [deg], ' + \
     'Lat2 [deg], ' + \
-    'Lon2 [deg] \n'
+    'Lon2 [deg], ' + \
+    'Alt1 [m], ' + \
+    'Alt2 [m], ' + \
+    'Hdg1 [deg], ' + \
+    'Hdg2 [deg], \n'
 
 # Global data
 area = None
@@ -191,7 +195,9 @@ class Area(Entity):
                     self.conflog.log(self.confinside_all,
                                      list(zip(ac1, ac2)),
                                      list(zip(self.create_time[idx1], self.create_time[idx2])),
-                                     traf.lat[idx1], traf.lon[idx1], traf.lat[idx2], traf.lon[idx2])
+                                     traf.lat[idx1], traf.lon[idx1], traf.lat[idx2], 
+                                     traf.lon[idx2], traf.alt[idx1], traf.alt[idx2],
+                                     traf.hdg[idx1], traf.hdg[idx2])
             self.prevconfpairs = set(traf.cd.confpairs)
 
             # Register distance values upon entry of experiment area

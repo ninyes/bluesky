@@ -55,7 +55,7 @@ confheader = \
     'Alt1 [m], ' + \
     'Alt2 [m], ' + \
     'Hdg1 [deg], ' + \
-    'Hdg2 [deg], \n'
+    'Hdg2 [deg] \n'
 
 # Global data
 area = None

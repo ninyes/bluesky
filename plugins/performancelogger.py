@@ -3,7 +3,7 @@
 
 import numpy as np
 # Import the global bluesky objects. Uncomment the ones you need
-from bluesky import traf  #, settings, navdb, traf, sim, scr, tools
+from bluesky import traf, stack  #, settings, navdb, traf, sim, scr, tools
 from bluesky.tools import datalog
 from bluesky.core import Entity, timed_function
 from bluesky.traffic.asas import StateBased
@@ -27,7 +27,7 @@ fuelheader = \
     'Call Sign [-], ' + \
     'Initial Mass [kg], ' + \
     'Current Mass [kg], ' + \
-    'Fuel Consumed [kg]'
+    'Fuel Consumed [kg] \n'
 
 # Log parameters for the los of separations log
 losheader = \
@@ -49,7 +49,17 @@ losheader = \
     'Alt2 [m], ' + \
     'Hdg1 [deg], ' + \
     'Hdg2 [deg], ' + \
-    'Intrusion severity [-]'
+    'Intrusion severity [-] \n'
+
+# Log parameters for the traffic density log
+densheader = \
+    '#######################################################\n' + \
+    'CONF LOG\n' + \
+    'Conflict Statistics\n' + \
+    '#######################################################\n\n' + \
+    'Parameters [Units]:\n' + \
+    'Simulation time [s], ' + \
+    'Traffic density [AC/m2] \n'
 
 # Global data
 perflog = None
@@ -94,6 +104,7 @@ class PerformanceLogger(Entity):
         super().__init__()
         self.sb = StateBased()
         self.area = Area()
+        self.prevlospairs = set()
         
         with self.settrafarrays():
             self.startmass = np.array([])
@@ -131,7 +142,15 @@ class PerformanceLogger(Entity):
     @timed_function(name='PERFLOG', dt=1.0)
     def update(self, dt):
         ''' Update Los of Separation metrics, intrusion severity '''
+        
+        # Hold simulation if new lospairs are detected to research cause
+        lospairs_new = list(set(traf.cd.lospairs) - self.prevlospairs)
+        if lospairs_new:
+            stack.stack("HOLD")
+        
+        self.prevlospairs = set(traf.cd.lospairs)
 
+        # Log lospairs
         if len(traf.cd.lospairs) > 0:
             newconf_unique = {frozenset(pair) for pair in traf.cd.lospairs}
             ac1, ac2 = zip(*newconf_unique)
@@ -146,3 +165,7 @@ class PerformanceLogger(Entity):
                             list(zip(traf.lat[idx2], traf.lon[idx2])),
                             list(zip(traf.alt[idx1], traf.alt[idx2])),
                             list(zip(traf.hdg[idx1], traf.hdg[idx2])), intsev)
+            
+    # @timed_function(name='PERFLOG', dt=900)
+    # def update(self, dt):
+        

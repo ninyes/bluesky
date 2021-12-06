@@ -502,7 +502,7 @@ class Autopilot(Entity, replaceable=True):
             # then stop immediately, as in: do not make it worse.
             if bs.traf.vs[idx]>0.0001:
                 self.vnavvs[idx] = 0.0
-                self.alt = bs.traf.alt[idx]
+                self.alt[idx] = bs.traf.alt[idx]
                 if bs.traf.swvnav[idx]:
                     bs.traf.selalt[idx] = bs.traf.alt[idx]
 
@@ -524,9 +524,9 @@ class Autopilot(Entity, replaceable=True):
                 descdist = abs(bs.traf.alt[idx] - toalt) / self.steepness  # [m] required length for descent
                 self.dist2vs[idx] = descdist - xtoalt   # [m] part of that length on this leg
 
-                print(bs.traf.id[idx],"traf.alt =",bs.traf.alt[idx]/ft,"ft toalt = ",toalt/ft,"ft descdist =",descdist/nm,"nm")
-                print ("d2wp = ",self.dist2wp[idx]/nm,"nm d2vs = ",self.dist2vs[idx]/nm,"nm")
-                print("xtoalt =",xtoalt/nm,"nm descdist =",descdist/nm,"nm")
+                # print(bs.traf.id[idx],"traf.alt =",bs.traf.alt[idx]/ft,"ft toalt = ",toalt/ft,"ft descdist =",descdist/nm,"nm")
+                # print ("d2wp = ",self.dist2wp[idx]/nm,"nm d2vs = ",self.dist2vs[idx]/nm,"nm")
+                # print("xtoalt =",xtoalt/nm,"nm descdist =",descdist/nm,"nm")
 
                 # Exceptions: Descend now? Or never on this leg?
                 if self.dist2wp[idx] < self.dist2vs[idx]:  # Urgent descent, we're late![m]
@@ -557,7 +557,7 @@ class Autopilot(Entity, replaceable=True):
             # then stop immediately, as in: do not make it worse.
             if bs.traf.vs[idx] < -0.0001:
                 self.vnavvs[idx] = 0.0
-                self.alt = bs.traf.alt[idx]
+                self.alt[idx] = bs.traf.alt[idx]
                 if bs.traf.swvnav[idx]:
                     bs.traf.selalt[idx] = bs.traf.alt[idx]
 

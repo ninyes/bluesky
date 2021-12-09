@@ -1,6 +1,6 @@
 ''' Conflict resolution based on the Modified Voltage Potential algorithm. '''
 import numpy as np
-from bluesky import stack
+from bluesky import stack, settings
 from bluesky.traffic.asas import ConflictResolution
 
 
@@ -166,19 +166,45 @@ class MVP(ConflictResolution):
 
         # Initialize an array to store time needed to resolve vertically
         timesolveV = np.ones(ownship.ntraf) * 1e9
+        
+        # Initialize an array to store if vs action is required irrespective of resolution domain
+        swvsact = np.zeros(ownship.ntraf, dtype=bool)     
+        
+        # Initialize an array to store the maximum altitudes for a conflict pair
+        confpairsidx = list(map(list, zip(*conf.confpairs)))   
+        confpairsidx = np.concatenate((np.array(ownship.id2idx(confpairsidx[0])).reshape(-1,1),
+                                       np.array(intruder.id2idx(confpairsidx[1])).reshape(-1,1)), axis=1)
 
         # Call MVP function to resolve conflicts-----------------------------------
         for ((ac1, ac2), qdr, dist, tcpa, tLOS) in zip(conf.confpairs, conf.qdr, conf.dist, conf.tcpa, conf.tLOS):
             idx1 = ownship.id.index(ac1)
             idx2 = intruder.id.index(ac2)
-
+            # print(ac1, ac2, idx1, idx2)
+            rpz_m = np.max(conf.rpz[[idx1, idx2]] * self.resofach)
+            hpz_m = np.max(conf.hpz[[idx1, idx2]] * self.resofacv)
+            # print(conf.rpz, len(conf.rpz))
+            # print(conf.dist, len(conf.dist))
+            # print(conf.alldist, len(conf.alldist))
             # If A/C indexes are found, then apply MVP on this conflict pair
             # Because ADSB is ON, this is done for each aircraft separately
             if idx1 >-1 and idx2 > -1:
                 dv_mvp, tsolV = self.MVP(ownship, intruder, conf, qdr, dist, tcpa, tLOS, idx1, idx2)
+                # print(dv_mvp, tsolV)
                 if tsolV < timesolveV[idx1]:
                     timesolveV[idx1] = tsolV
-
+                # print(rpz_m, hpz_m)
+                # print(conf.alldist[idx1, idx2])
+                # print(conf.alldist[idx1, idx2] < rpz_m)
+                # print(abs((ownship.alt[idx1] + ownship.vs[idx1]*settings.asas_dt)- \
+                #           (intruder.alt[idx2] + intruder.vs[idx2]*settings.asas_dt)) < hpz_m)
+                # print(swvsact)
+                # Check if AC pair is in rpz and predicted to be in hpz next step
+                hor_int = conf.alldist[idx1, idx2] < rpz_m # TODO: conf.dist only len(conflicts) instead of len(trafarrays), 
+                # hence, find the matching index of the conflict or recalculate distance
+                ver_int = abs((ownship.alt[idx1] + ownship.vs[idx1]*settings.asas_dt) - \
+                              (intruder.alt[idx2] + intruder.vs[idx2]*settings.asas_dt)) < hpz_m
+                swvsact[idx1] = np.logical_and(hor_int, ver_int)
+                
                 # Use priority rules if activated
                 if self.swprio:
                     dv[idx1], _ = self.applyprio(dv_mvp, dv[idx1], dv[idx2], ownship.vs[idx1], intruder.vs[idx2])
@@ -235,34 +261,67 @@ class MVP(ConflictResolution):
 
         # Determine ASAS module commands for all aircraft--------------------------
 
-        # Cap the velocity
-        newgscapped = np.maximum(ownship.perf.vmin,np.minimum(ownship.perf.vmax,newgs))
+        # Get the limits to cap velocity and vertical speed
+        # print(newtrack, newgs, newvs)
+        newtasnorth = newgs * np.cos(np.radians(newtrack)) - ownship.windnorth
+        newtaseast  = newgs * np.sin(np.radians(newtrack)) - ownship.windeast
+        newtas      = np.sqrt(newtasnorth**2 + newtaseast**2)
 
-        # Cap the vertical speed
-        vscapped = np.maximum(ownship.perf.vsmin,np.minimum(ownship.perf.vsmax,newvs))
+        # Cap the velocity and vertical speed
+        tascapped, vscapped, altcapped = ownship.perf.limits(newtas, newvs, ownship.alt, ownship.ax)
+        # print(ownship.perf.hmaxact)
+        signvs = np.sign(newvs)
+        vscapped = np.where(np.logical_or(signvs == 0, signvs == np.sign(vscapped)), vscapped, -vscapped)
+        # print(tascapped, vscapped, altcapped)
+        # Convert capped TAS to gs in line with aporasas
+        newgsnorth  = tascapped * np.cos(np.radians(newtrack)) + ownship.windnorth
+        newgseast   = tascapped * np.sin(np.radians(newtrack)) + ownship.windeast
+        newgscapped = np.sqrt(newgsnorth**2 + newgseast**2)
+        # print(newgscapped, vscapped)
 
         # Calculate if Autopilot selected altitude should be followed. This avoids ASAS from
         # climbing or descending longer than it needs to if the autopilot leveloff
         # altitude also resolves the conflict. Because asasalttemp is calculated using
         # the time to resolve, it may result in climbing or descending more than the selected
         # altitude.
+        # print('#################')
+        # print(ownship.ap.vs)
+        # print(ownship.selalt)
+        # print(ownship.alt)
         asasalttemp = vscapped * timesolveV + ownship.alt
         signdvs = np.sign(vscapped - ownship.ap.vs * np.sign(ownship.selalt - ownship.alt))
         signalt = np.sign(asasalttemp - ownship.selalt)
         alt = np.where(np.logical_or(signdvs == 0, signdvs == signalt), asasalttemp, ownship.selalt)
-
+        # print(asasalttemp)
+        # print(signdvs)
+        # print(signalt)
+        # print(alt)
         # To compute asas alt, timesolveV is used. timesolveV is a really big value (1e9)
         # when there is no conflict. Therefore asas alt is only updated when its
         # value is less than the look-ahead time, because for those aircraft are in conflict
         altCondition = np.logical_and(timesolveV<conf.dtlookahead, np.abs(dv[2,:])>0.0)
         alt[altCondition] = asasalttemp[altCondition]
-
+        # print(altCondition)
+        # print(alt)
         # If resolutions are limited in the horizontal direction, then asasalt should
         # be equal to auto pilot alt (aalt). This is to prevent a new asasalt being computed
         # using the auto pilot vertical speed (ownship.avs) using the code in line 106 (asasalttemp) when only
         # horizontal resolutions are allowed.
-        alt = alt * (1 - self.swresohoriz) + ownship.selalt * self.swresohoriz
+        # Additionally asasalt is forced when AC are in each others rpz and predicted to enter hpz, while one
+        # or more auto pilot alt (aalt) of the conflict pair are above the maximum altitude.
+        abovemaxalt = (alt * (1 - self.swresohoriz) + ownship.selalt * self.swresohoriz) > ownship.perf.hmaxact
+        abovemaxalt[confpairsidx[abovemaxalt[confpairsidx].any(axis=1)].flatten()] = True
+        maxAltCondition = swvsact * abovemaxalt
+        alt = (alt * (1 - self.swresohoriz) + ownship.selalt * self.swresohoriz) * (1 - maxAltCondition) \
+              + ownship.alt * maxAltCondition
+        # print(maxAltCondition)
+        # print((alt * (1 - self.swresohoriz) + ownship.selalt * self.swresohoriz) * (1 - maxAltCondition) \
+        #       + ownship.alt * maxAltCondition)
+        # alt = alt * (1 - self.swresohoriz) + ownship.selalt * self.swresohoriz
+        # print('Computed altitudes: ', alt)
+
         return newtrack, newgscapped, vscapped, alt
+        # return newtrack, newgs, vscapped, alt
 
     def MVP(self, ownship, intruder, conf, qdr, dist, tcpa, tLOS, idx1, idx2):
         """Modified Voltage Potential (MVP) resolution method"""

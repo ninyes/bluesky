@@ -1,13 +1,22 @@
 """ BlueSky logger plugin to log aircraft performance.
     Initially log fuel consumption and intrusion severity """
 
+import sys
 import numpy as np
 # Import the global bluesky objects. Uncomment the ones you need
-from bluesky import traf, stack  #, settings, navdb, traf, sim, scr, tools
-from bluesky.tools import datalog
+from bluesky import traf, stack, settings, sim  # navdb, traf, scr, tools
+from bluesky.tools import aero, datalog, geo
 from bluesky.core import Entity, timed_function
 from bluesky.traffic.asas import StateBased
 from plugins.area import Area
+
+if not 'C:/TUDelft/Thesis/AtlanticDirectRoutingGit/' in sys.path:
+    sys.path.insert(0, 'C:/TUDelft/Thesis/AtlanticDirectRoutingGit/')
+from pyproj import Proj
+from matplotlib import path
+from itertools import compress
+from shapely.geometry import shape
+from FIRarea import extract_fir, fir_boundary
 
 """ 
 Try to add the fuel consumption per aircraft, for which the initial mass is necessary.
@@ -55,11 +64,14 @@ losheader = \
 densheader = \
     '#######################################################\n' + \
     'CONF LOG\n' + \
-    'Conflict Statistics\n' + \
+    'Density Statistics\n' + \
     '#######################################################\n\n' + \
     'Parameters [Units]:\n' + \
     'Simulation time [s], ' + \
-    'Traffic density [AC/m2] \n'
+    'Number of aircraft [-], ' + \
+    'Average true airspeed [m/s], ' + \
+    'Average nominal path distance [m], ' + \
+    'Traffic density [AC/1000km^2] \n'
 
 # Global data
 perflog = None
@@ -108,14 +120,26 @@ class PerformanceLogger(Entity):
         
         with self.settrafarrays():
             self.startmass = np.array([])
+        
+        # Get the North Atlantic FIR
+        firdf     = extract_fir(['nat'])
+        coords    = fir_boundary(firdf, 'fir')
+        pa        = Proj("+proj=aea +lat_1=17.0 +lat_2=89.0 +lat_0=53.0 +lon_0=-23.0")
+        lon, lat  = tuple(np.array(coords)[0][:,1]), tuple(np.array(coords)[0][:,0])
+        x, y      = pa(lon, lat)
+        cop       = {"type": "Polygon", "coordinates": [zip(x, y)]}
+        self.simarea = shape(cop).area / 1e9 # thousand (1,000) km^2
+        self.p       = path.Path(np.array(coords[0]))
 
         # The loggers
         self.fuellog = datalog.crelog('FUELLOG', None, fuelheader)
-        self.loslog = datalog.crelog('LOSLOG', None, losheader)
+        self.loslog  = datalog.crelog('LOSLOG', None, losheader)
+        self.denslog = datalog.crelog('DENSLOG', None, densheader)
 
         # Start the loggers
         self.fuellog.start()
         self.loslog.start()
+        self.denslog.start()
 
     def reset(self):
         ''' Reset area state when simulation is reset. '''
@@ -165,7 +189,29 @@ class PerformanceLogger(Entity):
                             list(zip(traf.lat[idx2], traf.lon[idx2])),
                             list(zip(traf.alt[idx1], traf.alt[idx2])),
                             list(zip(traf.hdg[idx1], traf.hdg[idx2])), intsev)
-            
-    # @timed_function(name='PERFLOG', dt=900)
-    # def update(self, dt):
         
+        # Density calculation every 15 minutes
+        if sim.simt % 900 == 0:
+            # Get the aircraft in region
+            inreg  = self.p.contains_points(np.concatenate((traf.lat.reshape(-1,1), traf.lon.reshape(-1,1)), axis=1))
+            routes = list(compress(traf.ap.route, inreg)) 
+            
+            # Create empty arrays and loop over routes in region
+            avgspd  = np.array([])
+            avgdist = np.array([])
+    
+            for route in routes:
+                spd = np.array(route.wpspd)
+                alt = np.array(route.wpalt)
+                lat = np.array(route.wplat)
+                lon = np.array(route.wplon)
+                avgspd  = np.append(avgspd, np.average(aero.vcas2tas(spd, alt)))
+                avgdist = np.append(avgdist, np.sum(geo.latlondist_matrix(lat[0:-1], lon[0:-1],
+                                                                          lat[1::], lon[1::])*geo.nm))
+            
+            # Calculate the density
+            avg_tot_spd  = np.average(avgspd)
+            avg_tot_dist = np.average(avgdist) 
+            ac_dens      = np.sum(inreg)/(self.simarea*settings.asas_dt*(avg_tot_spd/avg_tot_dist))
+            
+            self.denslog.log(np.sum(inreg), avg_tot_spd, avg_tot_dist, ac_dens)

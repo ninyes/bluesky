@@ -16,7 +16,7 @@ from pyproj import Proj
 from matplotlib import path
 from itertools import compress
 from shapely.geometry import shape
-from FIRarea import extract_fir, fir_boundary
+from FIRarea import extract_fir, extract_Gander_Shanwick, fir_boundary
 
 """ 
 Try to add the fuel consumption per aircraft, for which the initial mass is necessary.
@@ -68,10 +68,14 @@ densheader = \
     '#######################################################\n\n' + \
     'Parameters [Units]:\n' + \
     'Simulation time [s], ' + \
-    'Number of aircraft [-], ' + \
+    'Number of AC [-], ' + \
     'Average true airspeed [m/s], ' + \
     'Average nominal path distance [m], ' + \
-    'Traffic density [AC/1000km^2] \n'
+    'Traffic density [AC/1000km^2], ' + \
+    'Number of AC (G/S) [-], ' + \
+    'Average true airspeed (G/S) [m/s], ' + \
+    'Average nominal path distance (G/S) [m], ' + \
+    'Traffic density (G/S) [AC/1000km^2] \n'
 
 # Global data
 perflog = None
@@ -121,7 +125,7 @@ class PerformanceLogger(Entity):
         with self.settrafarrays():
             self.startmass = np.array([])
         
-        # Get the North Atlantic FIR
+        # Get the North Atlantic navigation region area
         firdf     = extract_fir(['nat'])
         coords    = fir_boundary(firdf, 'fir')
         pa        = Proj("+proj=aea +lat_1=17.0 +lat_2=89.0 +lat_0=53.0 +lon_0=-23.0")
@@ -130,6 +134,16 @@ class PerformanceLogger(Entity):
         cop       = {"type": "Polygon", "coordinates": [zip(x, y)]}
         self.simarea = shape(cop).area / 1e9 # thousand (1,000) km^2
         self.p       = path.Path(np.array(coords[0]))
+        
+        # Get the Gander and Shanwick FIRs area
+        firdf     = extract_Gander_Shanwick()
+        coords    = fir_boundary(firdf, 'fir')
+        pa        = Proj("+proj=aea +lat_1=45.0 +lat_2=65.0 +lat_0=55.0 +lon_0=-35.5")
+        lon, lat  = tuple(np.array(coords)[0][:,1]), tuple(np.array(coords)[0][:,0])
+        x, y      = pa(lon, lat)
+        cop       = {"type": "Polygon", "coordinates": [zip(x, y)]}
+        self.GSarea = shape(cop).area / 1e9 # thousand (1,000) km^2
+        self.p_GS   = path.Path(np.array(coords[0]))
 
         # The loggers
         self.fuellog = datalog.crelog('FUELLOG', None, fuelheader)
@@ -167,12 +181,12 @@ class PerformanceLogger(Entity):
     def update(self, dt):
         ''' Update Los of Separation metrics, intrusion severity '''
         
-        # Hold simulation if new lospairs are detected to research cause
-        lospairs_new = list(set(traf.cd.lospairs) - self.prevlospairs)
-        if lospairs_new:
-            stack.stack("HOLD")
+        # # Hold simulation if new lospairs are detected to research cause
+        # lospairs_new = list(set(traf.cd.lospairs) - self.prevlospairs)
+        # if lospairs_new:
+        #     stack.stack("HOLD")
         
-        self.prevlospairs = set(traf.cd.lospairs)
+        # self.prevlospairs = set(traf.cd.lospairs)
 
         # Log lospairs
         if len(traf.cd.lospairs) > 0:
@@ -192,7 +206,7 @@ class PerformanceLogger(Entity):
         
         # Density calculation every 15 minutes
         if sim.simt % 900 == 0:
-            # Get the aircraft in region
+            # Get the aircraft in the whole North Atlantic region
             inreg  = self.p.contains_points(np.concatenate((traf.lat.reshape(-1,1), traf.lon.reshape(-1,1)), axis=1))
             routes = list(compress(traf.ap.route, inreg)) 
             
@@ -214,4 +228,31 @@ class PerformanceLogger(Entity):
             avg_tot_dist = np.average(avgdist) 
             ac_dens      = np.sum(inreg)/(self.simarea*settings.asas_dt*(avg_tot_spd/avg_tot_dist))
             
-            self.denslog.log(np.sum(inreg), avg_tot_spd, avg_tot_dist, ac_dens)
+            # Get the aircraft in the Gander and Shanwick FIRS
+            inreg_GS  = self.p_GS.contains_points(np.concatenate((traf.lat.reshape(-1,1), 
+                                                                  traf.lon.reshape(-1,1)), axis=1))
+            routes_GS = list(compress(traf.ap.route, inreg_GS)) 
+            
+            # Create empty arrays and loop over routes in region
+            avgspd_GS  = np.array([])
+            avgdist_GS = np.array([])
+    
+            for route_GS in routes_GS:
+                spd_GS = np.array(route_GS.wpspd)
+                alt_GS = np.array(route_GS.wpalt)
+                lat_GS = np.array(route_GS.wplat)
+                lon_GS = np.array(route_GS.wplon)
+                avgspd_GS  = np.append(avgspd_GS, np.average(aero.vcas2tas(spd_GS, alt_GS)))
+                avgdist_GS = np.append(avgdist_GS, 
+                                       np.sum(geo.latlondist_matrix(lat_GS[0:-1], lon_GS[0:-1],
+                                                                    lat_GS[1::], lon_GS[1::])*geo.nm))
+            
+            # Calculate the density
+            avg_tot_spd_GS  = np.average(avgspd_GS)
+            avg_tot_dist_GS = np.average(avgdist_GS) 
+            ac_dens_GS      = np.sum(inreg_GS)/(self.GSarea*settings.asas_dt*(avg_tot_spd_GS/avg_tot_dist_GS))
+            
+            self.denslog.log(np.sum(inreg), avg_tot_spd, avg_tot_dist, ac_dens,
+                             np.sum(inreg_GS), avg_tot_spd_GS, avg_tot_dist_GS, ac_dens_GS)
+            
+            

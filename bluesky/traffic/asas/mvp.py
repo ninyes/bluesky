@@ -1,5 +1,6 @@
 ''' Conflict resolution based on the Modified Voltage Potential algorithm. '''
 import numpy as np
+import bluesky as bs
 from bluesky import stack, settings
 from bluesky.traffic.asas import ConflictResolution
 
@@ -16,6 +17,15 @@ class MVP(ConflictResolution):
         self.swresohdg = False
         # [-] switch to limit resolution to the vertical direction
         self.swresovert = False
+        # Initialize an array to store the initial altitudes for aircraft in conflict
+        with self.settrafarrays():
+            self.init_intruder_tas = np.array([])
+            self.init_intruder_hdg = np.array([])
+
+    def create(self, n):
+        super().create(n)
+        self.init_intruder_tas[-n:] = 0.
+        self.init_intruder_hdg[-n:] = 0.
 
     def setprio(self, flag=None, priocode=''):
         '''Set the prio switch and the type of prio '''
@@ -168,12 +178,16 @@ class MVP(ConflictResolution):
         timesolveV = np.ones(ownship.ntraf) * 1e9
         
         # Initialize an array to store if vs action is required irrespective of resolution domain
-        swvsact = np.zeros(ownship.ntraf, dtype=bool)     
+        swvsact = np.zeros(ownship.ntraf, dtype=bool) 
         
-        # Initialize an array to store the maximum altitudes for a conflict pair
-        confpairsidx = list(map(list, zip(*conf.confpairs)))   
-        confpairsidx = np.concatenate((np.array(ownship.id2idx(confpairsidx[0])).reshape(-1,1),
-                                       np.array(intruder.id2idx(confpairsidx[1])).reshape(-1,1)), axis=1)
+        # Get the indices of the conflict pairs       
+        confpairsidx = np.array(ownship.id2idx(np.unique(list(map(list, zip(*conf.confpairs))))))
+
+        # Set initial tas if velocity at index is equal to zero and in conflicts   
+        swinitvars = np.logical_and(self.init_intruder_tas==0, 
+                                    np.array([x in confpairsidx for x in np.arange(0, ownship.ntraf)]))
+        self.init_intruder_tas[swinitvars] = ownship.tas[swinitvars]
+        self.init_intruder_hdg[swinitvars] = ownship.trk[swinitvars]
 
         # Call MVP function to resolve conflicts-----------------------------------
         for ((ac1, ac2), qdr, dist, tcpa, tLOS) in zip(conf.confpairs, conf.qdr, conf.dist, conf.tcpa, conf.tLOS):
@@ -182,9 +196,7 @@ class MVP(ConflictResolution):
             # print(ac1, ac2, idx1, idx2)
             rpz_m = np.max(conf.rpz[[idx1, idx2]] * self.resofach)
             hpz_m = np.max(conf.hpz[[idx1, idx2]] * self.resofacv)
-            # print(conf.rpz, len(conf.rpz))
-            # print(conf.dist, len(conf.dist))
-            # print(conf.alldist, len(conf.alldist))
+           
             # If A/C indexes are found, then apply MVP on this conflict pair
             # Because ADSB is ON, this is done for each aircraft separately
             if idx1 >-1 and idx2 > -1:
@@ -192,18 +204,15 @@ class MVP(ConflictResolution):
                 # print(dv_mvp, tsolV)
                 if tsolV < timesolveV[idx1]:
                     timesolveV[idx1] = tsolV
-                # print(rpz_m, hpz_m)
-                # print(conf.alldist[idx1, idx2])
-                # print(conf.alldist[idx1, idx2] < rpz_m)
-                # print(abs((ownship.alt[idx1] + ownship.vs[idx1]*settings.asas_dt)- \
-                #           (intruder.alt[idx2] + intruder.vs[idx2]*settings.asas_dt)) < hpz_m)
-                # print(swvsact)
+
                 # Check if AC pair is in rpz and predicted to be in hpz next step
-                hor_int = conf.alldist[idx1, idx2] < rpz_m # TODO: conf.dist only len(conflicts) instead of len(trafarrays), 
-                # hence, find the matching index of the conflict or recalculate distance
+                # hpz_m scaled with at least 1.2 resofacv for fast CL/DE traffic
+                hor_int = dist < rpz_m
                 ver_int = abs((ownship.alt[idx1] + ownship.vs[idx1]*settings.asas_dt) - \
-                              (intruder.alt[idx2] + intruder.vs[idx2]*settings.asas_dt)) < hpz_m
+                              (intruder.alt[idx2] + intruder.vs[idx2]*settings.asas_dt)) < \
+                          hpz_m / self.resofacv * max(self.resofacv, 1.2)
                 swvsact[idx1] = np.logical_and(hor_int, ver_int)
+                # print(ac1, ac2, idx1, idx2, swvsact[[idx1, idx2]], ownship.alt[[idx1, idx2]], ownship.vs[[idx1, idx2]])
                 
                 # Use priority rules if activated
                 if self.swprio:
@@ -312,8 +321,10 @@ class MVP(ConflictResolution):
         abovemaxalt = (alt * (1 - self.swresohoriz) + ownship.selalt * self.swresohoriz) > ownship.perf.hmaxact
         abovemaxalt[confpairsidx[abovemaxalt[confpairsidx].any(axis=1)].flatten()] = True
         maxAltCondition = swvsact * abovemaxalt
-        alt = (alt * (1 - self.swresohoriz) + ownship.selalt * self.swresohoriz) * (1 - maxAltCondition) \
-              + ownship.alt * maxAltCondition
+        # alt = (alt * (1 - self.swresohoriz) + ownship.selalt * self.swresohoriz) * (1 - maxAltCondition) \
+        #       + ownship.alt * maxAltCondition
+        alt = (alt * (1 - self.swresohoriz) + ownship.selalt * self.swresohoriz) * (1 - swvsact) \
+              + ownship.alt * swvsact
         # print(maxAltCondition)
         # print((alt * (1 - self.swresohoriz) + ownship.selalt * self.swresohoriz) * (1 - maxAltCondition) \
         #       + ownship.alt * maxAltCondition)
@@ -408,3 +419,196 @@ class MVP(ConflictResolution):
         dv = np.array([dv1, dv2, dv3])
 
         return dv, tsolV
+
+    def resumenav(self, conf, ownship, intruder):
+        '''
+            Decide for each aircraft in the conflict list whether the ASAS
+            should be followed or not, based on if the aircraft pairs passed
+            their CPA.
+        '''
+        # print('#############################################################')
+        # Add new conflicts to resopairs and confpairs_all and new losses to lospairs_all
+        self.resopairs.update(conf.confpairs)
+
+        # Conflict pairs to be deleted
+        delpairs = set()
+        changeactive = dict()
+        swinitint = np.zeros(ownship.ntraf, dtype=bool) 
+
+        # smallest relative angle between vectors of heading a and b
+        def anglediff(a, b):
+            d = a - b
+            if d > 180:
+                return anglediff(a, b + 360)
+            elif d < -180:
+                return anglediff(a + 360, b)
+            else:
+                return d
+
+        # Look at all conflicts, also the ones that are solved but CPA is yet to come
+        for conflict in self.resopairs:
+            idx1, idx2 = bs.traf.id2idx(conflict)
+            # print(conflict, idx1, idx2, ownship.alt[[idx1, idx2]], ownship.vs[[idx1, idx2]], conf.inconf[[idx1, idx2]])
+                
+            # If the ownship aircraft is deleted remove its conflict from the list
+            if idx1 < 0:
+                delpairs.add(conflict)
+                continue
+
+            if idx2 >= 0:
+                # Distance vector using flat earth approximation
+                re = 6371000.
+                dist = re * np.array([np.radians(intruder.lon[idx2] - ownship.lon[idx1]) *
+                                      np.cos(0.5 * np.radians(intruder.lat[idx2] +
+                                                              ownship.lat[idx1])),
+                                      np.radians(intruder.lat[idx2] - ownship.lat[idx1])])
+                
+                # Relative velocity vector
+                # vrel = np.array([intruder.gseast[idx2] - ownship.gseast[idx1],
+                #                   intruder.gsnorth[idx2] - ownship.gsnorth[idx1]])
+
+                # Check if conflict is past CPA
+                # past_cpa = np.dot(dist, vrel) > 0.0
+                rpz = np.max(conf.rpz[[idx1, idx2]] *self.resofach)
+                # print(intruder.trk[idx2], self.init_intruder_hdg[idx2], bs.traf.ap.trk[idx2])
+                # print(intruder.tas[idx2], self.init_intruder_tas[idx2], bs.traf.ap.tas[idx2])
+                # print('Past_cpa   : ', past_cpa)
+                
+                # Free to Revert Method (Two Criterion method)
+                # Criterion 1: The desired velocity is conflict-free given that
+                # the intruder maintains its current velocity
+                # Desired track ownship and current track intruder
+                des_hdg_1 = bs.traf.ap.trk[idx1]
+                cur_hdg_2 = intruder.trk[idx2]
+                
+                # Desired velocity ownship and current tas intruder
+                des_spd_1 = bs.traf.ap.tas[idx1]
+                cur_spd_2 = intruder.tas[idx2]
+
+                # Desired ground speed, current ground speed and relative speed
+                des_gsnorth_1 = des_spd_1 * np.cos(np.radians(des_hdg_1)) + ownship.windnorth[idx1]
+                des_gseast_1 = des_spd_1 * np.sin(np.radians(des_hdg_1)) + ownship.windeast[idx1]
+                cur_gsnorth_2 = cur_spd_2 * np.cos(np.radians(cur_hdg_2)) + intruder.windnorth[idx2]
+                cur_gseast_2 = cur_spd_2 * np.sin(np.radians(cur_hdg_2)) + intruder.windeast[idx2]
+                  
+                des_vrel = np.array([cur_gseast_2 - des_gseast_1, cur_gsnorth_2 - des_gsnorth_1])
+
+                des_tcpa_1 = np.maximum(-(des_vrel[0] * dist[0] + des_vrel[1] * dist[1]) / (des_vrel[0]*des_vrel[0] + des_vrel[1]*des_vrel[1]),0.0)
+                des_dcpa_1 = dist + des_vrel*des_tcpa_1
+                crit_1     = np.linalg.norm(des_dcpa_1) > rpz
+                # print('Criterion 1: ', crit_1)              
+                
+                # Criterion 2: The desired velocity is conflict-free given that
+                # the intruder reverts to its initial velocity
+                # Desired heading and tas
+                des_hdg_2 = self.init_intruder_hdg[idx2]
+                des_spd_2 = self.init_intruder_tas[idx2]
+
+                # Desired ground speed and relative speed
+                des_gsnorth_2 = des_spd_2 * np.cos(np.radians(des_hdg_2)) + intruder.windnorth[idx2]
+                des_gseast_2 = des_spd_2 * np.sin(np.radians(des_hdg_2)) + intruder.windeast[idx2]
+                
+                des_vrel = np.array([des_gseast_2 - des_gseast_1, des_gsnorth_2 - des_gsnorth_1])
+
+                # Time and distance to cpa and criterion 2
+                des_tcpa_2 = np.maximum(-(des_vrel[0] * dist[0] + des_vrel[1] * dist[1]) / (des_vrel[0]*des_vrel[0] + des_vrel[1]*des_vrel[1]),0.0)
+                des_dcpa_2 = dist + des_vrel*des_tcpa_2
+                crit_2     = np.linalg.norm(des_dcpa_2) > rpz
+                # print('Criterion 2: ', crit_2)
+                
+                free = np.logical_and(crit_1, crit_2)
+                # print('Free       : ', free)
+                
+                # Desired heading and tas AP
+                des_hdg_2 = bs.traf.ap.trk[idx2]
+                des_spd_2 = bs.traf.ap.tas[idx2]
+                
+                # Desired ground speed and relative speed
+                des_gsnorth_2 = des_spd_2 * np.cos(np.radians(des_hdg_2)) + intruder.windnorth[idx2]
+                des_gseast_2 = des_spd_2 * np.sin(np.radians(des_hdg_2)) + intruder.windeast[idx2]
+                
+                des_vrel = np.array([des_gseast_2 - des_gseast_1, des_gsnorth_2 - des_gsnorth_1])
+
+                # Time and distance to cpa and criterion 2
+                des_tcpa_2 = np.maximum(-(des_vrel[0] * dist[0] + des_vrel[1] * dist[1]) / (des_vrel[0]*des_vrel[0] + des_vrel[1]*des_vrel[1]),0.0)
+                des_dcpa_2 = dist + des_vrel*des_tcpa_2
+                crit_2     = np.linalg.norm(des_dcpa_2) > rpz
+                # print('Criterion AP: ', crit_2)
+                
+                ##############################################################
+                # # Desired heading and tas
+                # des_aphdg = bs.traf.ap.trk[[idx1, idx2]]
+                # des_apspd = bs.traf.ap.tas[[idx1, idx2]]
+
+                # # Desired groundspeed and relative speed
+                # des_gsnorth = des_apspd * np.cos(np.radians(des_aphdg)) + ownship.windnorth[[idx1, idx2]]
+                # des_gseast = des_apspd * np.sin(np.radians(des_aphdg)) + ownship.windeast[[idx1, idx2]] 
+                # des_vrel = np.diff((des_gseast, des_gsnorth)).reshape(-1)
+                
+                # # Time and distance to cpa and criterion 2
+                # des_tcpa_1 = np.maximum(-np.dot(dist, des_vrel) / np.dot(des_vrel, des_vrel), 0.)
+                # des_dcpa_1 = dist + des_vrel*des_tcpa_1
+                # crit_2 = np.linalg.norm(des_dcpa_1) > rpz
+                # print('Criterion 2: ', crit_2)
+                ##############################################################
+                
+                # hor_los:
+                # Aircraft should continue to resolve until there is no horizontal
+                # LOS. This is particularly relevant when vertical resolutions
+                # are used.
+                hdist = np.linalg.norm(dist)
+                hor_los = hdist < rpz / self.resofach
+
+                # Bouncing conflicts:
+                # If two aircraft are getting in and out of conflict continously,
+                # then they it is a bouncing conflict. ASAS should stay active until
+                # the bouncing stops.
+                is_bouncing = \
+                    abs(anglediff(ownship.trk[idx1], intruder.trk[idx2])) < 30.0 and \
+                    hdist < rpz
+                # print('Horlos and Bounce: ', hor_los,  is_bouncing)
+            # Start recovery for ownship if intruder is deleted, or if past CPA
+            # and not in horizontal LOS or a bouncing conflict
+            if idx2 >= 0 and (not free or hor_los or is_bouncing):
+                # Enable ASAS for this aircraft
+                changeactive[idx1] = True
+            else:
+                # Switch ASAS off for ownship if there are no other conflicts
+                # that this aircraft is involved in.
+                changeactive[idx1] = changeactive.get(idx1, False)
+                # If conflict is solved, remove it from the resopairs list
+                delpairs.add(conflict)
+                # Reset initial states of intruder if ownship is free
+                swinitint[idx2] = True
+
+        for idx, active in changeactive.items():
+            # Loop a second time: this is to avoid that ASAS resolution is
+            # turned off for an aircraft that is involved simultaneously in
+            # multiple conflicts, where the first, but not all conflicts are
+            # resolved.
+            self.active[idx] = active
+            if not active:
+                # Waypoint recovery after conflict: Find the next active waypoint
+                # and send the aircraft to that waypoint.
+                iwpid = bs.traf.ap.route[idx].findact(idx)
+                if iwpid != -1:  # To avoid problems if there are no waypoints
+                    bs.traf.ap.route[idx].direct(
+                        idx, bs.traf.ap.route[idx].wpname[iwpid])
+
+        # Remove pairs from the list that are past CPA or have deleted aircraft
+        self.resopairs -= delpairs
+
+        # Reset initial tas and hdg of intruder if ownship is free and the
+        # intruder has no conflict with other aircraft
+        if len(delpairs) > 0:
+            # print(delpairs)
+            # Get the intruders
+            if len(self.resopairs) > 0:
+                intruders = np.array(list(map(list, zip(*self.resopairs))))[1,:]
+                intridx   = np.unique(intruder.id2idx(intruders))
+                swinitint[intridx] = False
+            self.init_intruder_hdg[swinitint] = 0.        
+            self.init_intruder_tas[swinitint] = 0.  
+            # stack.stack('HOLD')
+
+        

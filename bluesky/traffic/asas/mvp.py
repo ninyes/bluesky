@@ -318,9 +318,9 @@ class MVP(ConflictResolution):
         # horizontal resolutions are allowed.
         # Additionally asasalt is forced when AC are in each others rpz and predicted to enter hpz, while one
         # or more auto pilot alt (aalt) of the conflict pair are above the maximum altitude.
-        abovemaxalt = (alt * (1 - self.swresohoriz) + ownship.selalt * self.swresohoriz) > ownship.perf.hmaxact
-        abovemaxalt[confpairsidx[abovemaxalt[confpairsidx].any(axis=1)].flatten()] = True
-        maxAltCondition = swvsact * abovemaxalt
+        # abovemaxalt = (alt * (1 - self.swresohoriz) + ownship.selalt * self.swresohoriz) > ownship.perf.hmaxact
+        # abovemaxalt[confpairsidx[abovemaxalt[confpairsidx].any(axis=1)].flatten()] = True
+        # maxAltCondition = swvsact * abovemaxalt
         # alt = (alt * (1 - self.swresohoriz) + ownship.selalt * self.swresohoriz) * (1 - maxAltCondition) \
         #       + ownship.alt * maxAltCondition
         alt = (alt * (1 - self.swresohoriz) + ownship.selalt * self.swresohoriz) * (1 - swvsact) \

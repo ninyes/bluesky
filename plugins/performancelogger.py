@@ -98,7 +98,8 @@ stateheader = \
     'Mach [-], ' + \
     'Ground speed [m/s], ' + \
     'CAS [m/s], ' + \
-    'Sel spd [m/s or -] \n'
+    'Sel spd [m/s or -], ' + \
+    'ASAS active [bool] \n'
 
 # Global data
 perflog = None
@@ -285,4 +286,4 @@ class PerformanceLogger(Entity):
             self.statelog.log(traf.id, traf.lat, traf.lon, traf.hdg, traf.trk, 
                               (traf.ap.trk + 360)%360, traf.alt, traf.selalt, 
                               traf.vs, traf.selvs, traf.M, traf.gs, traf.cas,
-                              traf.selspd)
+                              traf.selspd, traf.cr.active)

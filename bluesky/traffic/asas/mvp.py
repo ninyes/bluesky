@@ -193,15 +193,15 @@ class MVP(ConflictResolution):
         for ((ac1, ac2), qdr, dist, tcpa, tLOS) in zip(conf.confpairs, conf.qdr, conf.dist, conf.tcpa, conf.tLOS):
             idx1 = ownship.id.index(ac1)
             idx2 = intruder.id.index(ac2)
-            # print(ac1, ac2, idx1, idx2)
+            
+            # Determine largest RPZ and HPZ of the conflict pair
             rpz_m = np.max(conf.rpz[[idx1, idx2]] * self.resofach)
             hpz_m = np.max(conf.hpz[[idx1, idx2]] * self.resofacv)
-           
+            
             # If A/C indexes are found, then apply MVP on this conflict pair
             # Because ADSB is ON, this is done for each aircraft separately
             if idx1 >-1 and idx2 > -1:
-                dv_mvp, tsolV = self.MVP(ownship, intruder, conf, qdr, dist, tcpa, tLOS, idx1, idx2)
-                # print(dv_mvp, tsolV)
+                dv_mvp, tsolV = self.MVP(ownship, intruder, conf, qdr, dist, tcpa, tLOS, idx1, idx2, rpz_m, hpz_m)
                 if tsolV < timesolveV[idx1]:
                     timesolveV[idx1] = tsolV
 
@@ -212,7 +212,6 @@ class MVP(ConflictResolution):
                               (intruder.alt[idx2] + intruder.vs[idx2]*settings.asas_dt)) < \
                           hpz_m / self.resofacv * max(self.resofacv, 1.2)
                 swvsact[idx1] = np.logical_and(hor_int, ver_int)
-                # print(ac1, ac2, idx1, idx2, swvsact[[idx1, idx2]], ownship.alt[[idx1, idx2]], ownship.vs[[idx1, idx2]])
                 
                 # Use priority rules if activated
                 if self.swprio:
@@ -308,12 +307,10 @@ class MVP(ConflictResolution):
 
         return newtrack, tascapped, vscapped, alt
 
-    def MVP(self, ownship, intruder, conf, qdr, dist, tcpa, tLOS, idx1, idx2):
+    def MVP(self, ownship, intruder, conf, qdr, dist, tcpa, tLOS, idx1, idx2, rpz_m, hpz_m):
         """Modified Voltage Potential (MVP) resolution method"""
         # Preliminary calculations-------------------------------------------------
-        # Determine largest RPZ and HPZ of the conflict pair, use lookahead of ownship
-        rpz_m = np.max(conf.rpz[[idx1, idx2]] * self.resofach)
-        hpz_m = np.max(conf.hpz[[idx1, idx2]] * self.resofacv)
+        # Use lookahead of ownship
         dtlook = conf.dtlookahead[idx1]
         # Convert qdr from degrees to radians
         qdr = np.radians(qdr)

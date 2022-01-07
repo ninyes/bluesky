@@ -284,6 +284,6 @@ class PerformanceLogger(Entity):
         # Log aircraft states every 10 seconds
         if sim.simt % 10 == 0:
             self.statelog.log(traf.id, traf.lat, traf.lon, traf.hdg, traf.trk, 
-                              (traf.ap.trk + 360)%360, traf.alt, traf.selalt, 
+                              (traf.ap.trk + 360)%360, traf.alt/.3048, traf.selalt/.3048, 
                               traf.vs, traf.selvs, traf.M, traf.gs, traf.cas,
                               traf.selspd, traf.cr.active)

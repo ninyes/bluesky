@@ -100,10 +100,6 @@ class StateBased(ConflictDetection):
         swlos = (dist < rpz) * (np.abs(dalt) < hpz)
         lospairs = [(ownship.id[i], ownship.id[j]) for i, j in zip(*np.where(swlos))]
 
-        # Calculate the intrusion severity
-        self.int_sev = np.min(((rpz[swlos] - dist[swlos])/rpz[swlos], 
-                               (hpz[swlos] - abs(dalt[swlos]))/hpz[swlos]), axis=0)
-        
         return confpairs, lospairs, inconf, tcpamax, \
             qdr[swconfl], dist[swconfl], np.sqrt(dcpa2[swconfl]), \
                 tcpa[swconfl], tinconf[swconfl]
@@ -111,7 +107,7 @@ class StateBased(ConflictDetection):
 
 try:
     from bluesky.traffic.asas import casas
-
+    print('Using compiled statebased detection function')
 
     class CStateBased(StateBased):
         def __init__(self):

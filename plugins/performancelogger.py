@@ -220,9 +220,15 @@ class PerformanceLogger(Entity):
             ac1, ac2 = zip(*newconf_unique)
             idx1 = traf.id2idx(ac1)
             idx2 = traf.id2idx(ac2)
-            indcs = [traf.cd.lospairs.index(x) for x in list(zip(ac1, ac2))]
-            intsev = self.sb.int_sev[indcs]
-
+            
+            # Get the distance, dalt and calculate intrusion severity
+            rpz = np.asarray(np.maximum(traf.cd.rpz[idx1], traf.cd.rpz[idx2]))
+            hpz = np.asarray(np.maximum(traf.cd.hpz[idx1], traf.cd.hpz[idx2]))
+            dist = geo.kwikdist_matrix(traf.lat[idx1], traf.lon[idx1], 
+                                       traf.lat[idx2], traf.lon[idx2])*aero.nm
+            dalt = abs(traf.alt[idx1] - traf.alt[idx2])
+            intsev = np.min(((rpz - dist)/rpz, (hpz - dalt)/hpz), axis=0)
+            
             self.loslog.log(list(zip(ac1, ac2)), 
                             list(zip(self.area.create_time[idx1], self.area.create_time[idx2])),
                             list(zip(traf.lat[idx1], traf.lon[idx1])),

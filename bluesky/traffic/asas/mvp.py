@@ -276,7 +276,7 @@ class MVP(ConflictResolution):
         newtas      = np.sqrt(newtasnorth**2 + newtaseast**2)
         
         # Cap the velocity and vertical speed
-        tascapped, vscapped, altcapped = ownship.perf.limits(newtas, newvs, ownship.alt, ownship.ax)
+        tascapped, vscapped, altcapped = bs.traf.perf.limits(newtas, newvs, ownship.alt, ownship.ax)
         signvs = np.sign(newvs)
         vscapped = np.where(np.logical_or(signvs == 0, signvs == np.sign(vscapped)), vscapped, -vscapped)
 

@@ -77,29 +77,29 @@ densheader = \
     'Average nominal path distance (G/S) [m], ' + \
     'Traffic density (G/S) [AC/1000km^2] \n'
 
-# Log parameters for periodic logger of aircraft states
-stateheader = \
-    '#######################################################\n' + \
-    'STATE LOG\n' + \
-    'Periodic State Logger\n' + \
-    '#######################################################\n\n' + \
-    'Parameters [Units]:\n' + \
-    'Simulation time [s], ' + \
-    'ACID [-], ' + \
-    'Latitude [deg], ' + \
-    'Longitude [deg], ' + \
-    'Heading [deg], ' + \
-    'Track [deg], ' + \
-    'AP Track [deg], ' + \
-    'Altitude [m], ' + \
-    'Sel alt [m], ' + \
-    'Vertical Speed [m/s], ' + \
-    'Sel vs [m/s], ' + \
-    'Mach [-], ' + \
-    'Ground speed [m/s], ' + \
-    'CAS [m/s], ' + \
-    'Sel spd [m/s or -], ' + \
-    'ASAS active [bool] \n'
+# # Log parameters for periodic logger of aircraft states
+# stateheader = \
+#     '#######################################################\n' + \
+#     'STATE LOG\n' + \
+#     'Periodic State Logger\n' + \
+#     '#######################################################\n\n' + \
+#     'Parameters [Units]:\n' + \
+#     'Simulation time [s], ' + \
+#     'ACID [-], ' + \
+#     'Latitude [deg], ' + \
+#     'Longitude [deg], ' + \
+#     'Heading [deg], ' + \
+#     'Track [deg], ' + \
+#     'AP Track [deg], ' + \
+#     'Altitude [m], ' + \
+#     'Sel alt [m], ' + \
+#     'Vertical Speed [m/s], ' + \
+#     'Sel vs [m/s], ' + \
+#     'Mach [-], ' + \
+#     'Ground speed [m/s], ' + \
+#     'CAS [m/s], ' + \
+#     'Sel spd [m/s or -], ' + \
+#     'ASAS active [bool] \n'
 
 # Global data
 perflog = None
@@ -173,13 +173,13 @@ class PerformanceLogger(Entity):
         self.fuellog  = datalog.crelog('FUELLOG', None, fuelheader)
         self.loslog   = datalog.crelog('LOSLOG', None, losheader)
         self.denslog  = datalog.crelog('DENSLOG', None, densheader)
-        self.statelog = datalog.crelog('STATELOG', None, stateheader)
+        # self.statelog = datalog.crelog('STATELOG', None, stateheader)
 
         # Start the loggers
         self.fuellog.start()
         self.loslog.start()
         self.denslog.start()
-        self.statelog.start()
+        # self.statelog.start()
 
     def reset(self):
         ''' Reset area state when simulation is reset. '''
@@ -285,11 +285,11 @@ class PerformanceLogger(Entity):
             ac_dens_GS      = np.sum(inreg_GS)/(self.GSarea*settings.asas_dt*(avg_tot_spd_GS/avg_tot_dist_GS))
             
             self.denslog.log(np.sum(inreg), avg_tot_spd, avg_tot_dist, ac_dens,
-                             np.sum(inreg_GS), avg_tot_spd_GS, avg_tot_dist_GS, ac_dens_GS)
+                              np.sum(inreg_GS), avg_tot_spd_GS, avg_tot_dist_GS, ac_dens_GS)
             
-        # Log aircraft states every 10 seconds
-        if sim.simt % 10 == 0:
-            self.statelog.log(traf.id, traf.lat, traf.lon, traf.hdg, traf.trk, 
-                              (traf.ap.trk + 360)%360, traf.alt/.3048, traf.selalt/.3048, 
-                              traf.vs, traf.selvs, traf.M, traf.gs, traf.cas,
-                              traf.selspd, traf.cr.active)
+        # # Log aircraft states every 10 seconds
+        # if sim.simt % 10 == 0:
+        #     self.statelog.log(traf.id, traf.lat, traf.lon, traf.hdg, traf.trk, 
+        #                       (traf.ap.trk + 360)%360, traf.alt/.3048, traf.selalt/.3048, 
+        #                       traf.vs, traf.selvs, traf.M, traf.gs, traf.cas,
+        #                       traf.selspd, traf.cr.active, traf.perf.fuelflow, traf.perf.thrust)

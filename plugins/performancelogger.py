@@ -251,7 +251,7 @@ class PerformanceLogger(Entity):
                 alt = np.array(route.wpalt)
                 lat = np.array(route.wplat)
                 lon = np.array(route.wplon)
-                avgspd  = np.append(avgspd, np.average(aero.vcas2tas(spd, alt)))
+                avgspd  = np.append(avgspd, np.average(aero.vcasormach(spd, alt)[0]))
                 avgdist = np.append(avgdist, np.sum(geo.latlondist_matrix(lat[0:-1], lon[0:-1],
                                                                           lat[1::], lon[1::])*geo.nm))
             
@@ -274,7 +274,7 @@ class PerformanceLogger(Entity):
                 alt_GS = np.array(route_GS.wpalt)
                 lat_GS = np.array(route_GS.wplat)
                 lon_GS = np.array(route_GS.wplon)
-                avgspd_GS  = np.append(avgspd_GS, np.average(aero.vcas2tas(spd_GS, alt_GS)))
+                avgspd_GS  = np.append(avgspd_GS, np.average(aero.vcasormach(spd_GS, alt_GS)[0]))
                 avgdist_GS = np.append(avgdist_GS, 
                                        np.sum(geo.latlondist_matrix(lat_GS[0:-1], lon_GS[0:-1],
                                                                     lat_GS[1::], lon_GS[1::])*geo.nm))

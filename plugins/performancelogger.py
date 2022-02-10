@@ -36,7 +36,9 @@ fuelheader = \
     'Call Sign [-], ' + \
     'Initial Mass [kg], ' + \
     'Current Mass [kg], ' + \
-    'Fuel Consumed [kg] \n'
+    'Fuel Consumed [kg], ' + \
+    'Distance 2D [nm], ' + \
+    'Distance 3D [nm] \n'
 
 # Log parameters for the los of separations log
 losheader = \
@@ -148,6 +150,7 @@ class PerformanceLogger(Entity):
         
         with self.settrafarrays():
             self.startmass = np.array([])
+            self.distance3D = np.array([])
         
         # Get the North Atlantic navigation region area
         firdf     = extract_fir(['nat'])
@@ -156,9 +159,9 @@ class PerformanceLogger(Entity):
         lon, lat  = tuple(np.array(coords)[0][:,1]), tuple(np.array(coords)[0][:,0])
         x, y      = pa(lon, lat)
         cop       = {"type": "Polygon", "coordinates": [zip(x, y)]}
-        self.simarea = shape(cop).area / 1e9 # thousand (1,000) km^2
+        self.simarea = shape(cop).area/1e9 # thousand (1,000) km^2
         self.p       = path.Path(np.array(coords[0]))
-        
+
         # Get the Gander and Shanwick FIRs area
         firdf     = extract_Gander_Shanwick()
         coords    = fir_boundary(firdf, 'fir')
@@ -166,7 +169,7 @@ class PerformanceLogger(Entity):
         lon, lat  = tuple(np.array(coords)[0][:,1]), tuple(np.array(coords)[0][:,0])
         x, y      = pa(lon, lat)
         cop       = {"type": "Polygon", "coordinates": [zip(x, y)]}
-        self.GSarea = shape(cop).area / 1e9 # thousand (1,000) km^2
+        self.GSarea = shape(cop).area/1e9 # thousand (1,000) km^2
         self.p_GS   = path.Path(np.array(coords[0]))
 
         # The loggers
@@ -196,7 +199,9 @@ class PerformanceLogger(Entity):
             traf.id[idx],
             self.startmass[idx],
             traf.perf.mass[idx],
-            (self.startmass[idx] - traf.perf.mass[idx]))
+            (self.startmass[idx] - traf.perf.mass[idx]),
+            traf.distflown[idx]/aero.nm,
+            self.distance3D[idx]/aero.nm)
     
     def set_mass(self, idx, mass):
         """ Set the mass of the aircraft for performance purposes """
@@ -206,6 +211,9 @@ class PerformanceLogger(Entity):
     @timed_function(name='PERFLOG', dt=1.0)
     def update(self, dt):
         ''' Update Los of Separation metrics, intrusion severity '''
+        
+        resultantspd = np.sqrt(traf.gs * traf.gs + traf.vs * traf.vs)
+        self.distance3D += dt * resultantspd
         
         # # Hold simulation if new lospairs are detected to research cause
         # lospairs_new = list(set(traf.cd.lospairs) - self.prevlospairs)
@@ -247,18 +255,21 @@ class PerformanceLogger(Entity):
             avgdist = np.array([])
     
             for route in routes:
-                spd = np.array(route.wpspd)
-                alt = np.array(route.wpalt)
                 lat = np.array(route.wplat)
                 lon = np.array(route.wplon)
+                LinA = self.p.contains_points(np.concatenate((lat.reshape(-1,1), lon.reshape(-1,1)), axis=1))
+                spd = np.array(route.wpspd)[LinA]
+                alt = np.array(route.wpalt)[LinA]
+                lat = np.array(route.wplat)[LinA]
+                lon = np.array(route.wplon)[LinA]
                 avgspd  = np.append(avgspd, np.average(aero.vcasormach(spd, alt)[0]))
                 avgdist = np.append(avgdist, np.sum(geo.latlondist_matrix(lat[0:-1], lon[0:-1],
-                                                                          lat[1::], lon[1::])*geo.nm))
+                                                                          lat[1::], lon[1::])*aero.nm))
             
             # Calculate the density
-            avg_tot_spd  = np.average(avgspd)
+            avg_tot_spd = np.average(avgspd)
             avg_tot_dist = np.average(avgdist) 
-            ac_dens      = np.sum(inreg)/(self.simarea*settings.asas_dt*(avg_tot_spd/avg_tot_dist))
+            ac_dens = np.sum(inreg)/(self.simarea*(avg_tot_spd/avg_tot_dist))
             
             # Get the aircraft in the Gander and Shanwick FIRS
             inreg_GS  = self.p_GS.contains_points(np.concatenate((traf.lat.reshape(-1,1), 
@@ -270,19 +281,22 @@ class PerformanceLogger(Entity):
             avgdist_GS = np.array([])
     
             for route_GS in routes_GS:
-                spd_GS = np.array(route_GS.wpspd)
-                alt_GS = np.array(route_GS.wpalt)
-                lat_GS = np.array(route_GS.wplat)
-                lon_GS = np.array(route_GS.wplon)
+                lat = np.array(route_GS.wplat)
+                lon = np.array(route_GS.wplon)
+                LinA = self.p_GS.contains_points(np.concatenate((lat.reshape(-1,1), lon.reshape(-1,1)), axis=1))
+                spd_GS = np.array(route_GS.wpspd)[LinA]
+                alt_GS = np.array(route_GS.wpalt)[LinA]
+                lat_GS = np.array(route_GS.wplat)[LinA]
+                lon_GS = np.array(route_GS.wplon)[LinA]
                 avgspd_GS  = np.append(avgspd_GS, np.average(aero.vcasormach(spd_GS, alt_GS)[0]))
                 avgdist_GS = np.append(avgdist_GS, 
                                        np.sum(geo.latlondist_matrix(lat_GS[0:-1], lon_GS[0:-1],
-                                                                    lat_GS[1::], lon_GS[1::])*geo.nm))
+                                                                    lat_GS[1::], lon_GS[1::])*aero.nm))
             
             # Calculate the density
-            avg_tot_spd_GS  = np.average(avgspd_GS)
+            avg_tot_spd_GS = np.average(avgspd_GS)
             avg_tot_dist_GS = np.average(avgdist_GS) 
-            ac_dens_GS      = np.sum(inreg_GS)/(self.GSarea*settings.asas_dt*(avg_tot_spd_GS/avg_tot_dist_GS))
+            ac_dens_GS = np.sum(inreg_GS)/(self.GSarea*(avg_tot_spd_GS/avg_tot_dist_GS))
             
             self.denslog.log(np.sum(inreg), avg_tot_spd, avg_tot_dist, ac_dens,
                               np.sum(inreg_GS), avg_tot_spd_GS, avg_tot_dist_GS, ac_dens_GS)

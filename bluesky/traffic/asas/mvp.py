@@ -535,4 +535,4 @@ class MVP(ConflictResolution):
                 swinitint[intridx] = False
             self.init_intruder_hdg[swinitint] = 0.        
             self.init_intruder_tas[swinitint] = 0.  
-        
+        #test
